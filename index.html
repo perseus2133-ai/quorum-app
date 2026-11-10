@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080B12">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self' https://api.github.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; manifest-src 'self'">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="quorum">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>quorum</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header id="bar">
+  <div class="bar-title">
+    <span class="logo">🗳️ quorum</span>
+    <span id="bar-sub" class="bar-sub">4계열 11룰 합의 엔진</span>
+  </div>
+  <button id="refresh" class="icon-btn" data-act="refresh" aria-label="데이터 새로고침">↻</button>
+</header>
+
+<main id="view" tabindex="-1"></main>
+
+<nav id="tabs" aria-label="화면 전환">
+  <a href="#/board" data-tab="board"><span class="ti">🎯</span><span>보드</span></a>
+  <a href="#/stock" data-tab="stock"><span class="ti">🔬</span><span>종목</span></a>
+  <a href="#/lab" data-tab="lab"><span class="ti">📊</span><span>룰 랩</span></a>
+  <a href="#/portfolio" data-tab="portfolio"><span class="ti">💼</span><span>포트폴리오</span></a>
+  <a href="#/settings" data-tab="settings"><span class="ti">⚙️</span><span>설정</span></a>
+</nav>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="version.js"></script>
+<script src="trading.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
