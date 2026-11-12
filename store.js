@@ -138,9 +138,35 @@
     return { changed: true, data: pack(manifest, parts) };
   }
 
+  // 종목 차트(charts/{code}.json) — 종목을 열 때 그 파일만 받는다.
+  // generated(결과 생성 시각)가 같으면 기기에 보관한 것을 쓰고, 받기에 실패하면
+  // 예전 것이라도 보여 준다(status 를 stale 로 바꿔 화면이 경고한다).
+  const chartMem = new Map();
+  function fetchChart(code, generated) {
+    const key = `${code}@${generated}`;
+    if (chartMem.has(key)) return chartMem.get(key);
+    const job = (async () => {
+      let kept = null;
+      try { kept = await dbGet(`chart:${code}`); } catch (e) { /* 보관소 없음 */ }
+      if (kept && kept.gen === generated && kept.data) return kept.data;
+      try {
+        const data = await fetchFile(`charts/${code}.json`);
+        try { await dbPutAll({ [`chart:${code}`]: { gen: generated, data } }); } catch (e) { /* 무시 */ }
+        return data;
+      } catch (e) {
+        if (kept && kept.data && e.kind !== 'notfound') return Object.assign({}, kept.data, { status: 'stale' });
+        throw e;
+      }
+    })();
+    chartMem.set(key, job);
+    job.catch(() => chartMem.delete(key));
+    if (chartMem.size > 60) chartMem.delete(chartMem.keys().next().value);
+    return job;
+  }
+
   root.Store = {
     REPO, BRANCH, DEV, KEY, ls, token,
     needsToken: () => !token.get() && !DEV,
-    loadCached, refresh, clearCache: dbClear,
+    loadCached, refresh, fetchChart, clearCache: dbClear,
   };
 })(self);

@@ -281,3 +281,35 @@ details.fold > summary { cursor: pointer; font-size: .84rem; font-weight: 700; c
 @supports (-webkit-touch-callout: none) {
   input, select, textarea { font-size: 16px; }
 }
+
+/* ── 종목 상세: 네이버 증권 버튼 · 캔들 차트 ───────────────── */
+.detail-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.detail-top .stock-head { flex: 1 1 auto; min-width: 0; }
+.naver-btn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 11px; border-radius: 10px; font-size: .76rem; font-weight: 700;
+  color: #03C75A; background: rgba(3,199,90,.10); border: 1px solid rgba(3,199,90,.35);
+  text-decoration: none; white-space: nowrap;
+}
+.naver-btn:active { background: rgba(3,199,90,.22); }
+.naver-n {
+  display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 4px;
+  background: #03C75A; color: #fff; font-size: .62rem; font-weight: 900; line-height: 1;
+}
+.qc { margin-top: 10px; }
+.qc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.qc-title { font-size: .86rem; font-weight: 700; }
+.qc-seg { margin: 0; }
+.qc-seg button { padding: 6px 13px; }
+.qc-note { font-size: .74rem; color: var(--dim); margin: 6px 0 2px; }
+.qc-warn { font-size: .74rem; color: var(--warn); margin: 6px 0 2px; }
+.qc-src { color: var(--mute); }
+.qc-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .7rem; color: var(--dim); margin: 3px 0; }
+.qc-svg { width: 100%; height: auto; display: block; margin-top: 4px; touch-action: pan-y; }
+.qc-svg text { fill: var(--dim); font-size: 11px; font-family: var(--mono); }
+.qc-svg .qc-grid { stroke: currentColor; color: var(--text); opacity: .10; }
+.qc-svg .qc-cursor { stroke: var(--text); stroke-dasharray: 3 3; opacity: .5; }
+.qc-slider { width: 100%; margin: 6px 0 2px; accent-color: var(--accent); }
+.qc-detail { font-size: .78rem; line-height: 1.55; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
+.qc-detail b { color: var(--text); }

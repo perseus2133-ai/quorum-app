@@ -327,12 +327,19 @@
       <div class="sub mute" style="margin-top:8px">${esc(meta.description)}</div></div>`;
   }
 
+  // 네이버 증권 종목 화면. 앱(WebView)은 앱 밖 주소를 기기 브라우저로 넘긴다.
+  const naverUrl = (code) => `https://m.stock.naver.com/domestic/stock/${encodeURIComponent(code)}/total`;
+  const naverBtn = (code) => `<a class="naver-btn" href="${naverUrl(code)}" target="_blank" rel="noopener noreferrer">` +
+    '<span class="naver-n">N</span>네이버 증권<span aria-hidden="true">↗</span></a>';
+  // 캔들 차트 자리 — 그린 뒤 QChart.hydrate 가 채운다
+  const chartBox = (code) => `<section class="card qc" data-chart-code="${esc(code)}" data-chart-gen="${esc(S.data.manifest.generated || '')}" aria-label="주가 차트"></section>`;
+
   function stockDetailView(code) {
     const r = S.byCode[code], d = S.data.details[code], m = S.data.manifest;
     const back = '<a class="back" href="#/stock">‹ 종목 검색</a>';
     if (!r || !d) {
       const p = S.data.prices[code];
-      return `${back}<h2>${esc(p ? p[0] : code)}</h2>
+      return `${back}<div class="detail-top"><h2 style="margin:0">${esc(p ? p[0] : code)}</h2>${naverBtn(code)}</div>
         <div class="empty">유니버스 하드필터를 통과하지 못한 종목이다.<br>어떤 룰도 평가하지 않았다.
         ${p ? `<br><br><span class="num">${esc(code)}</span> · 현재가 ${fnum(p[1], '원')}` : ''}</div>`;
     }
@@ -372,9 +379,10 @@
 
     const er = isNum(r.er) ? fnum(r.er, '%', 1, true) : '—';
     return `${back}
-      <div class="stock-head" style="margin-bottom:2px"><h2 style="margin:0">${esc(r.n)}</h2>
-        <span class="stock-code">${esc(r.c)} · ${esc(r.m)} · ${S.rank[code]}위</span></div>
+      <div class="detail-top"><div class="stock-head" style="margin-bottom:2px"><h2 style="margin:0">${esc(r.n)}</h2>
+        <span class="stock-code">${esc(r.c)} · ${esc(r.m)} · ${S.rank[code]}위</span></div>${naverBtn(r.c)}</div>
       <div class="sub" style="margin-top:0">${esc(r.s)}</div>
+      ${chartBox(r.c)}
       ${grid2([
         tile('합의 점수', fnum(r.sc), `${r.af}개 계열 · ${r.v}표`, gc),
         tile('등급', esc(GRADE_LABEL[r.g] || r.g), r.gd || '가드레일 없음', gc, true),
@@ -845,6 +853,7 @@ base       = Σ 가중[f]·계열강도[f] / Σ 가중[f]
     const body = r.name === 'stock' ? (r.arg ? stockDetailView(r.arg) : stockListView())
       : (views[r.name] || boardView)();
     view.innerHTML = statusBanner() + body;
+    if (r.name === 'stock' && r.arg && self.QChart) QChart.hydrate(view);
 
     const key = r.name + '/' + r.arg;
     if (key !== S.lastRoute) { S.lastRoute = key; window.scrollTo(0, 0); }
