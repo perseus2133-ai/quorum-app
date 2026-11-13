@@ -30,7 +30,7 @@
     loading: false, error: null, lastRoute: '',
     ui: {
       grades: new Set(['QUORUM', 'STRONG', 'WATCH']), market: 'ALL', fams: new Set(),
-      topn: PAGE, q: '', horizon: null, ruleView: 'picked',
+      topn: PAGE, q: '', horizon: null, ruleView: 'picked', watchOnly: false,
       editing: null, pick: null, confirm: null,
     },
   };
@@ -89,6 +89,33 @@
   const kv = (k, v, text) => `<div class="kv${text ? ' text' : ''}"><span>${esc(k)}</span><span>${v}</span></div>`;
   const comboLabel = (st) => FAMS.filter((f, i) => st[i] > 0).map((f) => FAM_LABEL[f]).join('+');
   const famCountColor = (n) => (n >= 3 ? GRADE_COLOR.QUORUM : n === 2 ? K.accent : K.mute);
+
+  // ── 관심종목 ★ · 최근 본 종목 (폰에만 저장) ─────────────────
+  const watch = {
+    list: () => Store.ls.get(Store.KEY.watch, []).filter((c) => typeof c === 'string'),
+    has: (c) => watch.list().includes(c),
+    toggle(c) {
+      const l = watch.list();
+      const on = !l.includes(c);
+      Store.ls.set(Store.KEY.watch, on ? [c, ...l] : l.filter((x) => x !== c));
+      return on;
+    },
+  };
+  const RECENT_MAX = 10;
+  const recent = {
+    list: () => Store.ls.get(Store.KEY.recent, []).filter((c) => typeof c === 'string'),
+    push(c) {
+      const l = recent.list().filter((x) => x !== c);
+      Store.ls.set(Store.KEY.recent, [c, ...l].slice(0, RECENT_MAX));
+    },
+    clear: () => Store.ls.del(Store.KEY.recent),
+  };
+  const starBtn = (code) => {
+    const on = watch.has(code);
+    return `<button class="star-btn${on ? ' on' : ''}" data-act="watch" data-code="${esc(code)}" aria-pressed="${on}"` +
+      ` aria-label="${on ? '관심종목에서 빼기' : '관심종목에 넣기'}">${on ? '★' : '☆'}</button>`;
+  };
+  const nameOf = (code) => (S.byCode[code] ? S.byCode[code].n : (S.data.prices[code] || [code])[0]);
 
   function toast(msg) {
     const el = $('#toast');
@@ -192,7 +219,7 @@
     return `<a class="card" href="#/stock/${esc(r.c)}" style="border-left:3px solid ${gc}">
       <div class="stock-head">
         <span class="rank" style="color:${gc}">#${rank}</span>
-        <span class="stock-name">${esc(r.n)}</span>
+        <span class="stock-name">${watch.has(r.c) ? '<span class="star-mark">★</span>' : ''}${esc(r.n)}</span>
         <span class="stock-code">${esc(r.c)} · ${esc(r.m)}</span>
         <span class="stock-score" style="color:${gc}">${fnum(r.sc)}</span>
       </div>
@@ -204,6 +231,31 @@
       ${r.gd ? `<div class="sub mute">🛡 ${esc(r.gd)}</div>` : ''}
       ${chips(r.rs)}
     </a>`;
+  }
+
+  // 직전 결과 대비 등급 변화 (상위 3등급에 걸친 것만 — export_mobile._changes)
+  const gradeTag = (g) => (g
+    ? `<span class="gtag" style="color:${GRADE_COLOR[g] || K.dim}">${esc(g)}</span>`
+    : '<span class="gtag" style="color:' + K.mute + '">보드 밖</span>');
+  function changeRows(list) {
+    return list.map(([code, name, from, to]) => `<a class="chg-row" href="#/stock/${esc(code)}">
+        <span class="chg-name">${watch.has(code) ? '<span class="star-mark">★</span>' : ''}${esc(name)}</span>
+        <span class="chg-move">${gradeTag(from)}<span class="chg-arrow">→</span>${gradeTag(to)}</span></a>`).join('');
+  }
+  function changesCard(m) {
+    const ch = m.changes;
+    if (!ch) return '';
+    const SHOW = 6;
+    const part = (title, color, list) => {
+      if (!list.length) return '';
+      const head = list.slice(0, SHOW), rest = list.slice(SHOW);
+      return `<div class="chg-sec" style="color:${color}">${title} <b class="num">${list.length}</b></div>${changeRows(head)}` +
+        (rest.length ? `<details class="chg-more"><summary>나머지 ${rest.length}종목</summary>${changeRows(rest)}</details>` : '');
+    };
+    const empty = !ch.up.length && !ch.down.length;
+    return `<h3>오늘의 변화 <span class="sub mute" style="font-weight:400">${esc(String(ch.base).slice(5))} → ${esc(String(ch.now).slice(5))}</span></h3>
+      <div class="card chg">${empty ? '<div class="sub">QUORUM·STRONG·WATCH 등급에 바뀐 종목이 없다.</div>'
+        : part('▲ 등급 상승', K.pos, ch.up) + part('▼ 등급 하락', K.neg, ch.down)}</div>`;
   }
 
   function diagFold(m) {
@@ -219,7 +271,9 @@
     const regColor = { Bull: K.pos, Bear: K.neg, 'High Volatility': K.warn }[reg.regime] || K.dim;
     const confColor = !isNum(m.avg_conf) ? K.dim : m.avg_conf >= 55 ? K.pos : m.avg_conf >= 40 ? K.warn : K.neg;
 
+    const watched = new Set(watch.list());
     let rows = S.data.board.filter((r) =>
+      (!ui.watchOnly || watched.has(r.c)) &&
       (!ui.grades.size || ui.grades.has(r.g)) &&
       (ui.market === 'ALL' || r.m === ui.market) &&
       [...ui.fams].every((f) => r.st[FAMS.indexOf(f)] > 0));
@@ -229,7 +283,9 @@
 
     let body;
     if (!rows.length) {
-      body = '<div class="empty">조건에 맞는 종목이 없다.<br>등급이나 계열 조건을 완화해볼 것.</div>';
+      body = ui.watchOnly
+        ? `<div class="empty">조건에 맞는 관심종목이 없다.<br>종목 상세의 ☆ 를 눌러 관심종목을 넣는다.${watched.size ? '<br>등급 필터를 풀면 더 보일 수 있다.' : ''}</div>`
+        : '<div class="empty">조건에 맞는 종목이 없다.<br>등급이나 계열 조건을 완화해볼 것.</div>';
     } else {
       const dist = {};
       rows.forEach((r) => { const k = comboLabel(r.st); dist[k] = (dist[k] || 0) + 1; });
@@ -260,7 +316,9 @@
         tile('평균 신뢰도', fnum(m.avg_conf), `데이터 ${stamp(m.data_ts)} KST`, confColor),
       ])}
       ${!isNum(m.avg_conf) || m.avg_conf < 35 ? caveat('신뢰도가 전반적으로 낮다. 합의 점수가 높아도 이 점수대·계열 조합의 역사적 근거는 약하다는 뜻이다. 룰 랩에서 표본을 먼저 확인할 것.') : ''}
+      ${changesCard(m)}
       <div class="filters">
+        <div class="frow"><span class="flabel">관심</span><button class="pill${ui.watchOnly ? ' on' : ''}" data-act="watchonly">★ 관심종목만 (${watched.size})</button></div>
         <div class="frow"><span class="flabel">등급</span>${pills(GRADES.map((x) => [x, GRADE_LABEL[x]]), (v) => ui.grades.has(v), 'grade')}</div>
         <div class="frow"><span class="flabel">시장</span>${pills([['ALL', '전체'], ['KOSPI', 'KOSPI'], ['KOSDAQ', 'KOSDAQ']], (v) => ui.market === v, 'market')}</div>
         <div class="frow"><span class="flabel">계열</span>${pills(FAMS.map((f) => [f, FAM_LABEL[f] + ' 필수']), (v) => ui.fams.has(v), 'fam')}</div>
@@ -270,27 +328,51 @@
   }
 
   // ── 🔬 종목 ────────────────────────────────────────────────
+  // 검색·목록의 한 줄. 보드 종목은 등급 배지·점수, 보드 밖 종목은 첫 탈락 사유.
+  function resultRow(code) {
+    const r = S.byCode[code];
+    const star = watch.has(code) ? '<span class="star-mark">★</span>' : '';
+    if (r) {
+      return `<a class="result-row" href="#/stock/${esc(code)}">
+        <span class="stock-name">${star}${esc(r.n)}</span><span class="stock-code">${esc(code)} · ${esc(r.m)}</span>
+        <span class="result-right">${gradeTag(r.g)}<span class="stock-score" style="color:${GRADE_COLOR[r.g]}">${fnum(r.sc)}</span></span></a>`;
+    }
+    const p = S.data.prices[code];
+    if (!p) return '';
+    const o = (S.data.outside || {})[code];
+    const why = o && o.r && o.r.length ? o.r[0] : '유니버스 밖';
+    return `<a class="result-row out" href="#/stock/${esc(code)}">
+        <span class="stock-name">${star}${esc(p[0])}</span><span class="stock-code">${esc(code)}</span>
+        <span class="result-right"><span class="out-why">${esc(why)}</span></span></a>`;
+  }
+
   function searchResults(q) {
     const s = q.trim().toLowerCase();
-    const hit = (code, name) => !s || code.includes(s) || String(name).toLowerCase().includes(s);
-    const inBoard = S.data.board.filter((r) => hit(r.c, r.n)).slice(0, 60);
-    let html = inBoard.map((r) => `<a class="result-row" href="#/stock/${esc(r.c)}">
-        <span class="stock-name">${esc(r.n)}</span><span class="stock-code">${esc(r.c)} · ${esc(r.m)}</span>
-        <span class="stock-score" style="color:${GRADE_COLOR[r.g]}">${fnum(r.sc)}</span></a>`).join('');
-    if (s) {
-      const out = Object.entries(S.data.prices)
-        .filter(([code, v]) => !S.byCode[code] && hit(code, v[0])).slice(0, 10);
-      html += out.map(([code, v]) => `<div class="result-row">
-          <span class="stock-name" style="color:${K.mute}">${esc(v[0])}</span><span class="stock-code">${esc(code)}</span>
-          <span class="sub mute" style="margin-left:auto">유니버스 밖</span></div>`).join('');
+    if (!s) {
+      const w = watch.list().filter((c) => S.byCode[c] || S.data.prices[c]);
+      const rc = recent.list().filter((c) => S.byCode[c] || S.data.prices[c]);
+      let html = '';
+      if (w.length) html += `<h3>★ 관심종목 <span class="sub mute">${w.length}</span></h3>${w.map(resultRow).join('')}`;
+      if (rc.length) {
+        html += `<h3 class="row-h">🕘 최근 본 종목<button class="link-btn" data-act="recent-clear">지우기</button></h3>` +
+          rc.map(resultRow).join('');
+      }
+      html += `<h3>보드 상위</h3>` + S.data.board.slice(0, 30).map((r) => resultRow(r.c)).join('');
+      return html;
     }
+    const hit = (code, name) => code.includes(s) || String(name).toLowerCase().includes(s);
+    const inBoard = S.data.board.filter((r) => hit(r.c, r.n)).slice(0, 60).map((r) => r.c);
+    const out = Object.entries(S.data.prices)
+      .filter(([code, v]) => !S.byCode[code] && hit(code, v[0])).slice(0, 20).map(([code]) => code);
+    const html = inBoard.map(resultRow).join('') +
+      (out.length ? `<div class="sub mute" style="margin:10px 0 2px">보드 밖 · 유니버스 필터에서 빠진 종목</div>` + out.map(resultRow).join('') : '');
     return html || '<div class="empty">일치하는 종목이 없다.</div>';
   }
 
   function stockListView() {
     return `
       <h2>🔬 종목 상세</h2>
-      <div class="note">합의 점수는 결론이고, 여기는 그 결론이 어떻게 나왔는지다. 이름이나 코드로 찾는다.</div>
+      <div class="note">합의 점수는 결론이고, 여기는 그 결론이 어떻게 나왔는지다. 이름이나 코드로 찾는다. 보드 밖 종목은 왜 빠졌는지 보여준다.</div>
       <input type="search" id="q" placeholder="종목명 또는 코드" value="${esc(S.ui.q)}" autocomplete="off">
       <div id="results" style="margin-top:6px">${searchResults(S.ui.q)}</div>`;
   }
@@ -334,15 +416,43 @@
   // 캔들 차트 자리 — 그린 뒤 QChart.hydrate 가 채운다
   const chartBox = (code) => `<section class="card qc" data-chart-code="${esc(code)}" data-chart-gen="${esc(S.data.manifest.generated || '')}" aria-label="주가 차트"></section>`;
 
+  // 보드 밖 종목 — 11룰은 평가하지 않았다. 어떤 유니버스 필터에 걸렸는지 보여준다.
+  function outsideView(code, back) {
+    const p = S.data.prices[code];
+    if (!p) return `${back}<div class="empty">종목 정보를 찾을 수 없다 (${esc(code)}).</div>`;
+    const o = (S.data.outside || {})[code];
+    const reasons = o && o.r && o.r.length ? o.r : null;
+    const ucfg = (S.data.manifest.config || {}).universe || {};
+    return `${back}
+      <div class="detail-top"><div class="stock-head" style="margin-bottom:2px"><h2 style="margin:0">${starBtn(code)}${esc(p[0])}</h2>
+        <span class="stock-code">${esc(code)}${p[3] ? ' · ' + esc(p[3]) : ''}</span></div>${naverBtn(code)}</div>
+      <div class="sub" style="margin-top:0">${esc(p[2] || '업종 미분류')} · 현재가 ${fnum(p[1], '원')}</div>
+      <div class="card out-card">
+        <div class="tile-label">보드 밖 — 유니버스 필터에서 빠졌다</div>
+        ${reasons ? `<ul class="out-list">${reasons.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`
+          : '<div class="sub">탈락 사유 자료가 아직 없다. 다음 갱신 뒤 보인다.</div>'}
+        <div class="sub mute">유니버스 밖 종목은 11룰이 평가하지 않는다. 합의 점수가 '낮은' 게 아니라 '없는' 것이다.</div>
+      </div>
+      ${o ? `<h3>기본 지표</h3><div class="card">
+        ${kv('시가총액', fmcap(o.mc))}
+        ${kv('20일 거래대금', fwon(o.to20))}
+        ${kv('PER / PBR', `${fnum(o.per, '', 1)} / ${fnum(o.pbr, '', 2)}`)}
+        ${kv('ROE / 부채비율', `${fnum(o.roe, '%', 1)} / ${fnum(o.debt, '%')}`)}
+      </div>` : ''}
+      <details class="fold"><summary>유니버스 기준</summary><div class="card">
+        ${kv('시가총액', `${fnum(ucfg.min_mcap)}억 이상`)}
+        ${kv('20일 평균 거래대금', `${fnum((ucfg.min_turnover_20d || 0) / 1e8)}억 이상`)}
+        ${kv('영업이익', "'24 ~ '28E 모두 흑자 (결측은 통과)")}
+        ${kv('부채비율', `${fnum(ucfg.max_debt)}% 이하 (결측은 통과)`)}
+        ${kv('컨센서스', "'27E 또는 '28E 영업이익 보유")}
+        ${kv('제외', '우선주 · 스팩')}</div></details>
+      <div class="note">차트는 보드 종목만 매일 모은다. 이 종목의 차트·뉴스는 네이버 증권에서 본다.</div>`;
+  }
+
   function stockDetailView(code) {
     const r = S.byCode[code], d = S.data.details[code], m = S.data.manifest;
     const back = '<a class="back" href="#/stock">‹ 종목 검색</a>';
-    if (!r || !d) {
-      const p = S.data.prices[code];
-      return `${back}<div class="detail-top"><h2 style="margin:0">${esc(p ? p[0] : code)}</h2>${naverBtn(code)}</div>
-        <div class="empty">유니버스 하드필터를 통과하지 못한 종목이다.<br>어떤 룰도 평가하지 않았다.
-        ${p ? `<br><br><span class="num">${esc(code)}</span> · 현재가 ${fnum(p[1], '원')}` : ''}</div>`;
-    }
+    if (!r || !d) return outsideView(code, back);
     const gc = GRADE_COLOR[r.g] || K.dim, b = d.b;
     const metas = m.rules;
 
@@ -379,7 +489,7 @@
 
     const er = isNum(r.er) ? fnum(r.er, '%', 1, true) : '—';
     return `${back}
-      <div class="detail-top"><div class="stock-head" style="margin-bottom:2px"><h2 style="margin:0">${esc(r.n)}</h2>
+      <div class="detail-top"><div class="stock-head" style="margin-bottom:2px"><h2 style="margin:0">${starBtn(r.c)}${esc(r.n)}</h2>
         <span class="stock-code">${esc(r.c)} · ${esc(r.m)} · ${S.rank[code]}위</span></div>${naverBtn(r.c)}</div>
       <div class="sub" style="margin-top:0">${esc(r.s)}</div>
       ${chartBox(r.c)}
@@ -608,7 +718,7 @@
 
     const backup = `<details class="fold"><summary>백업 · 복원</summary>
       <div class="note">아래 내용을 복사해 메모장 등에 보관한다. 복원할 때는 이 칸에 붙여넣고 복원을 누른다.</div>
-      <textarea id="backup" spellcheck="false">${esc(JSON.stringify({ positions, cash }, null, 1))}</textarea>
+      <textarea id="backup" spellcheck="false">${esc(JSON.stringify({ positions, cash, watch: watch.list() }, null, 1))}</textarea>
       <div class="btn-row"><button class="btn sm" data-act="backup-copy">복사</button>
         <button class="btn sm" data-act="backup-restore">붙여넣은 내용으로 복원</button></div></details>`;
 
@@ -715,7 +825,10 @@
     });
     savePositions(list);
     if (obj && isNum(Number(obj.cash))) Store.ls.set(Store.KEY.cash, Number(obj.cash));
-    toast(`${list.length}종목을 복원했다`);
+    const w = obj && Array.isArray(obj.watch)
+      ? [...new Set(obj.watch.map((c) => String(c).trim().padStart(6, '0')).filter((c) => /^\d{6}$/.test(c)))] : null;
+    if (w) Store.ls.set(Store.KEY.watch, w);
+    toast(`${list.length}종목을 복원했다${w ? ` · 관심종목 ${w.length}개` : ''}`);
     render();
   }
 
@@ -853,7 +966,10 @@ base       = Σ 가중[f]·계열강도[f] / Σ 가중[f]
     const body = r.name === 'stock' ? (r.arg ? stockDetailView(r.arg) : stockListView())
       : (views[r.name] || boardView)();
     view.innerHTML = statusBanner() + body;
-    if (r.name === 'stock' && r.arg && self.QChart) QChart.hydrate(view);
+    if (r.name === 'stock' && r.arg) {
+      if (S.byCode[r.arg] || S.data.prices[r.arg]) recent.push(r.arg);
+      if (self.QChart) QChart.hydrate(view);
+    }
 
     const key = r.name + '/' + r.arg;
     if (key !== S.lastRoute) { S.lastRoute = key; window.scrollTo(0, 0); }
@@ -871,6 +987,13 @@ base       = Σ 가중[f]·계열강도[f] / Σ 가중[f]
     more: () => { S.ui.topn += PAGE; render(); },
     horizon: (el) => { S.ui.horizon = el.dataset.v; render(); },
     ruleview: (el) => { S.ui.ruleView = el.dataset.v; render(); },
+    watch: (el) => {
+      const on = watch.toggle(el.dataset.code);
+      toast(on ? `★ 관심종목에 넣었다 — ${nameOf(el.dataset.code)}` : `관심종목에서 뺐다 — ${nameOf(el.dataset.code)}`);
+      render();
+    },
+    watchonly: () => { S.ui.watchOnly = !S.ui.watchOnly; S.ui.topn = PAGE; render(); },
+    'recent-clear': () => { recent.clear(); $('#results').innerHTML = searchResults(S.ui.q); },
     'pos-new': () => { S.ui.editing = 'new'; S.ui.pick = null; render(); const q = $('#pq'); if (q) q.focus(); },
     'pos-edit': (el) => { S.ui.editing = el.dataset.id; S.ui.pick = null; render(); const f = $('[data-form=position]'); if (f) f.scrollIntoView({ block: 'center' }); },
     'pos-cancel': () => { S.ui.editing = null; S.ui.pick = null; render(); },

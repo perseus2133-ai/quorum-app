@@ -10,7 +10,12 @@
   const BRANCH = 'mobile-data';
   const API = `https://api.github.com/repos/${REPO}/contents/`;
   const FILES = ['board.json', 'details.json', 'prices.json', 'backtest.json'];
-  const KEY = { token: 'quorum.token', positions: 'quorum.positions', cash: 'quorum.cash' };
+  // 없어도 되는 파일 — 이전 워크플로가 만든 결과에는 없을 수 있다
+  const OPTIONAL = ['outside.json'];
+  const KEY = {
+    token: 'quorum.token', positions: 'quorum.positions', cash: 'quorum.cash',
+    watch: 'quorum.watch', recent: 'quorum.recent',
+  };
   const DB_NAME = 'quorum', DB_STORE = 'files';
 
   // 개발 PC 에서 `python -m http.server` 로 띄우면 토큰 없이 mobile_out/ 을 읽는다.
@@ -104,12 +109,14 @@
     return res.json();
   }
 
-  function pack(manifest, parts) {
+  function pack(manifest, parts, extra) {
     return {
       manifest, board: parts[0].rows || [], details: parts[1] || {},
       prices: parts[2] || {}, backtest: parts[3] || {},
+      outside: (extra && extra[0]) || {},
     };
   }
+  const fetchOptional = (name) => fetchFile(name).catch(() => null);
 
   // 기기에 보관된 마지막 결과. 없으면 null.
   async function loadCached() {
@@ -118,7 +125,10 @@
       if (!manifest) return null;
       const parts = await Promise.all(FILES.map(dbGet));
       if (parts.some((p) => p == null)) return null;
-      return pack(manifest, parts);
+      const extra = await Promise.all(OPTIONAL.map((n) => dbGet(n).catch(() => null)));
+      // 앱을 새 버전으로 바꾼 직후엔 보관소에 새 파일이 없다 — 통째로 다시 받게 한다
+      if (extra.some((x) => x === undefined)) return null;
+      return pack(manifest, parts, extra);
     } catch (e) {
       return null;
     }
@@ -131,11 +141,13 @@
     if (!force && currentGenerated && manifest.generated === currentGenerated) {
       return { changed: false, data: null };
     }
-    const parts = await Promise.all(FILES.map(fetchFile));
+    const [parts, extra] = await Promise.all([
+      Promise.all(FILES.map(fetchFile)), Promise.all(OPTIONAL.map(fetchOptional))]);
     const entries = { 'manifest.json': manifest };
     FILES.forEach((n, i) => { entries[n] = parts[i]; });
+    OPTIONAL.forEach((n, i) => { entries[n] = extra[i] || {}; });
     try { await dbPutAll(entries); } catch (e) { /* 보관 실패는 화면 표시를 막지 않는다 */ }
-    return { changed: true, data: pack(manifest, parts) };
+    return { changed: true, data: pack(manifest, parts, extra) };
   }
 
   // 종목 차트(charts/{code}.json) — 종목을 열 때 그 파일만 받는다.

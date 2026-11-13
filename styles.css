@@ -313,3 +313,28 @@ details.fold > summary { cursor: pointer; font-size: .84rem; font-weight: 700; c
 .qc-detail { font-size: .78rem; line-height: 1.55; background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
 .qc-detail b { color: var(--text); }
+
+/* ── 관심종목 · 최근 본 종목 · 오늘의 변화 · 보드 밖 종목 ───────── */
+.star-btn {
+  border: 0; background: transparent; color: var(--mute); font-size: 1.15rem; line-height: 1;
+  padding: 2px 6px 2px 0; margin-right: 2px; cursor: pointer; vertical-align: 1px;
+}
+.star-btn.on { color: var(--warn); }
+.star-mark { color: var(--warn); margin-right: 4px; font-size: .85em; }
+.gtag { font-family: var(--mono); font-size: .64rem; font-weight: 700; letter-spacing: .02em; }
+.result-right { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.result-row.out .stock-name { color: var(--dim); }
+.out-why { font-size: .68rem; color: var(--mute); max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-h { display: flex; align-items: baseline; justify-content: space-between; }
+.link-btn { border: 0; background: transparent; color: var(--mute); font-size: .72rem; cursor: pointer; padding: 2px 0; }
+.chg { padding-top: 6px; padding-bottom: 6px; }
+.chg-sec { font-size: .76rem; font-weight: 700; margin: 8px 0 2px; }
+.chg-row { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 0; border-top: 1px solid var(--border); color: var(--text); text-decoration: none; font-size: .86rem; }
+.chg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chg-move { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; }
+.chg-arrow { color: var(--mute); font-size: .72rem; }
+.chg-more summary { font-size: .74rem; color: var(--dim); padding: 6px 0; cursor: pointer; }
+.out-card { border-left: 3px solid var(--mute); }
+.out-list { margin: 6px 0 8px; padding-left: 18px; font-size: .86rem; line-height: 1.7; }
+.out-list li::marker { color: var(--neg); }

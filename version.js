@@ -1,1 +1,1 @@
-self.APP_VERSION = 'web-20261113-ca5bc1c';
+self.APP_VERSION = 'web-20261113-c9c0c17';
